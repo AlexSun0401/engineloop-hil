@@ -1,0 +1,90 @@
+VERSION "EngineLoop CAN draft 0.1 - NOT FROZEN"
+
+
+NS_ :
+	NS_DESC_
+	CM_
+	BA_DEF_
+	BA_
+	VAL_
+	BA_DEF_DEF_
+	SIG_VALTYPE_
+
+BS_:
+
+BU_: ECU HIL
+
+BO_ 256 ECU_Status: 8 ECU
+ SG_ EngineSpeed : 0|16@1+ (0.25,0) [0|16383.75] "rpm" HIL
+ SG_ SyncState : 16|4@1+ (1,0) [0|15] "" HIL
+ SG_ EcuMode : 20|4@1+ (1,0) [0|15] "" HIL
+ SG_ SparkAdvanceCmd : 24|16@1- (0.01,0) [-327.68|327.67] "deg" HIL
+ SG_ ThrottleDutyCmd : 40|10@1+ (0.1,0) [0|102.3] "%" HIL
+ SG_ ErrorFlags : 50|8@1+ (1,0) [0|255] "" HIL
+ SG_ AliveCounter : 58|4@1+ (1,0) [0|15] "" HIL
+
+BO_ 257 ECU_Info: 8 ECU
+ SG_ BuildHash : 0|32@1+ (1,0) [0|4294967295] "" HIL
+ SG_ BuildVariant : 32|4@1+ (1,0) [0|15] "" HIL
+ SG_ BuildDirty : 36|1@1+ (1,0) [0|1] "" HIL
+ SG_ SparkTrim : 40|8@1- (0.1,0) [-12.8|12.7] "deg" HIL
+ SG_ SparkTableHash : 48|16@1+ (1,0) [0|65535] "" HIL
+
+BO_ 272 ECU_Debug: 8 ECU
+ SG_ LostSyncCount : 0|16@1+ (1,0) [0|65535] "" HIL
+ SG_ MaxIsrLatency : 16|16@1+ (0.1,0) [0|6553.5] "us" HIL
+ SG_ CanRxTimeoutCount : 32|16@1+ (1,0) [0|65535] "" HIL
+ SG_ AliveCounter : 48|4@1+ (1,0) [0|15] "" HIL
+
+BO_ 512 HIL_Sensors: 8 HIL
+ SG_ AirChargeCycle : 0|16@1+ (0.1,0) [0|6553.5] "mg" ECU
+ SG_ CoolantTemp : 16|8@1+ (1,-40) [-40|215] "degC" ECU
+ SG_ AliveCounter : 24|4@1+ (1,0) [0|15] "" ECU
+
+BO_ 768 HIL_Cmd: 8 HIL
+ SG_ PedalPosition : 0|10@1+ (0.1,0) [0|102.3] "%" ECU
+ SG_ EcuModeReq : 10|4@1+ (1,0) [0|15] "" ECU
+ SG_ InfoRequest : 14|1@1+ (1,0) [0|1] "" ECU
+ SG_ AliveCounter : 16|4@1+ (1,0) [0|15] "" ECU
+
+
+CM_ "EngineLoop draft DBC. Classic CAN 2.0A, 500 kbit/s, little-endian (Intel) signals, DLC 8. Status: proposal for P0 review; not frozen. See docs/interface_spec.md.";
+CM_ BU_ ECU "STM32 simplified ECU under test.";
+CM_ BU_ HIL "KR260 Linux test runner (python-can over SocketCAN, USB-to-CAN adapter).";
+CM_ BO_ 256 "ECU live status. Diagnostic only: verdicts use FPGA/logic-analyzer measured edges, never these reported values.";
+CM_ SG_ 256 EngineSpeed "Speed estimated by the ECU from crank tooth periods.";
+CM_ SG_ 256 SparkAdvanceCmd "Commanded spark advance after any build trim, degrees BTDC, positive = earlier.";
+CM_ SG_ 256 ErrorFlags "bit0 CAN_RX_TIMEOUT, bit1 SYNC_LOST_SINCE_LAST_INFO, bit2 SPARK_SCHEDULE_LATE, bit3 AIR_CLAMPED_TO_TABLE, bit4 RPM_CLAMPED_TO_TABLE, bit5 WATCHDOG_RESET, bit6-7 reserved. Any set bit during a capture window makes the point INVALID with that reason.";
+CM_ SG_ 256 AliveCounter "Increments by 1 per frame, wraps 15 to 0. A gap marks stale data.";
+CM_ BO_ 257 "Build provenance. Sent every 1000 ms and immediately after HIL_Cmd.InfoRequest=1. The runner checks these fields against the expected build before a sweep; a mismatch makes the whole run INVALID.";
+CM_ SG_ 257 BuildHash "First 8 hex digits of the firmware git commit, as a 32-bit integer.";
+CM_ SG_ 257 BuildVariant "Firmware variant selected at build time.";
+CM_ SG_ 257 BuildDirty "1 if the firmware was built from a working tree with uncommitted changes.";
+CM_ SG_ 257 SparkTrim "Compile-time spark trim in degrees (0.0 normal/fixed, +3.0 fault build).";
+CM_ SG_ 257 SparkTableHash "First two bytes (big-endian) of the SHA-256 of the spark_table.json compiled into the firmware.";
+CM_ BO_ 272 "ECU health counters for the report.";
+CM_ BO_ 512 "Virtual sensor values computed by the plant. The Python timing reference must use the decoded (quantized) AirChargeCycle the ECU received, not the unquantized plant value.";
+CM_ SG_ 512 AirChargeCycle "Total air mass of all cylinders per 720-degree engine cycle.";
+CM_ SG_ 512 CoolantTemp "Constant in v1.";
+CM_ BO_ 768 "Test commands. Sent on change and at least every 100 ms so the ECU can detect a host timeout (proposed change from on-change only).";
+CM_ SG_ 768 EcuModeReq "Use PEDAL for dyno timing sweeps (idle PI disabled, no wind-up); IDLE_PI for the free-run idle demonstration.";
+CM_ SG_ 768 InfoRequest "Set to 1 to request an immediate ECU_Info frame.";
+
+BA_DEF_ "BusType" STRING ;
+BA_DEF_ "Baudrate" INT 0 1000000;
+BA_DEF_ BO_ "GenMsgCycleTime" INT 0 65535;
+BA_DEF_DEF_ "BusType" "CAN";
+BA_DEF_DEF_ "Baudrate" 500000;
+BA_DEF_DEF_ "GenMsgCycleTime" 0;
+BA_ "BusType" "CAN";
+BA_ "Baudrate" 500000;
+BA_ "GenMsgCycleTime" BO_ 256 10;
+BA_ "GenMsgCycleTime" BO_ 257 1000;
+BA_ "GenMsgCycleTime" BO_ 272 100;
+BA_ "GenMsgCycleTime" BO_ 512 10;
+BA_ "GenMsgCycleTime" BO_ 768 100;
+
+VAL_ 256 SyncState 0 "NO_SYNC" 1 "GAP_FOUND" 2 "FULL_SYNC" 3 "SYNC_LOST" ;
+VAL_ 256 EcuMode 0 "OUTPUTS_DISABLED" 1 "PEDAL" 2 "IDLE_PI" ;
+VAL_ 257 BuildVariant 0 "NORMAL" 1 "FAULT_SPARK_PLUS3" 2 "FIXED" ;
+VAL_ 768 EcuModeReq 0 "OUTPUTS_DISABLED" 1 "PEDAL" 2 "IDLE_PI" ;
